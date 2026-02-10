@@ -260,9 +260,9 @@ func main() {
 		if ghRepo != "" {
 			parts := strings.SplitN(ghRepo, "/", 2)
 			if len(parts) == 2 {
-				// Check for custom domain via CNAME file in the org's .github.io repo
+				// Check for custom domain via raw CNAME file in the org's .github.io repo
 				orgPagesURL := "https://" + parts[0] + ".github.io"
-				customDomain := detectCustomDomain(parts[0])
+				customDomain := fetchOrgCNAME(parts[0])
 				if customDomain != "" {
 					orgPagesURL = "https://" + customDomain
 				}
@@ -804,28 +804,21 @@ func rewritePathPrefix(dir, prefix string) error {
 	})
 }
 
-// detectCustomDomain checks the GitHub API for a custom domain on the org's
-// .github.io Pages site. Returns the domain string or "" if none found.
-func detectCustomDomain(org string) string {
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s.github.io/pages", org, org)
+// fetchOrgCNAME fetches the raw CNAME file from the org's .github.io repo.
+// Returns the custom domain string or "" if not found.
+func fetchOrgCNAME(org string) string {
+	rawURL := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s.github.io/main/CNAME", org, org)
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("GET", apiURL, nil)
-	if err != nil {
-		return ""
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := client.Do(req)
+	resp, err := client.Get(rawURL)
 	if err != nil || resp.StatusCode != 200 {
 		return ""
 	}
 	defer resp.Body.Close()
-	var pages struct {
-		CNAME string `json:"cname"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&pages); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return ""
 	}
-	return pages.CNAME
+	return strings.TrimSpace(string(body))
 }
 
 // countFiles counts files with the given extension in a directory tree.
