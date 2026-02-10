@@ -1,0 +1,39 @@
+name: 'Arch Docs'
+description: 'Generate architecture documentation for any repository using Supermodel'
+author: 'Supermodel'
+branding:
+  icon: 'layers'
+  color: 'purple'
+
+inputs:
+  supermodel-api-key:
+    description: 'Supermodel API key'
+    required: true
+  site-name:
+    description: 'Display name for the docs site (default: repo name + "Architecture Docs")'
+    required: false
+    default: ''
+  base-url:
+    description: 'Base URL for the generated site'
+    required: false
+    default: ''
+  output-dir:
+    description: 'Output directory relative to workspace'
+    required: false
+    default: './arch-docs-output'
+  templates-dir:
+    description: 'Custom templates directory (overrides bundled defaults)'
+    required: false
+    default: ''
+
+outputs:
+  site-path:
+    description: 'Absolute path to the built site directory'
+  entity-count:
+    description: 'Number of entities generated'
+  page-count:
+    description: 'Total HTML pages generated'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'

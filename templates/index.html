@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+{{template "_head.html"}}
+<title>{{.Site.Name}} — Architecture Documentation</title>
+<meta name="description" content="{{.Site.Description}}">
+<link rel="canonical" href="{{.Site.BaseURL}}/">
+{{template "_og.html" .}}
+<style>{{template "_styles.css"}}</style>
+{{.JsonLD}}
+</head>
+<body>
+{{template "_header.html" .}}
+
+<main id="main-content">
+  <div class="container">
+    <div class="hero">
+      <h1>{{.Site.Name}}</h1>
+      <p>Architecture documentation generated from code analysis. Explore every file, function, class, and domain.</p>
+      <div class="hero-stats">
+        <a href="/all/index.html" class="hero-stat hero-stat-link">
+          <div class="num">{{.EntityCount | formatNumber}}</div>
+          <div class="label">Total Entities</div>
+        </a>
+        {{range .Taxonomies}}
+        <a href="/{{.Name}}/index.html" class="hero-stat hero-stat-link">
+          <div class="num">{{len .Entries}}</div>
+          <div class="label">{{.Label}}</div>
+        </a>
+        {{end}}
+      </div>
+    </div>
+
+    <div class="chart-panel arch-map-panel">
+      <h3>Architecture Overview</h3>
+      <div id="arch-overview"></div>
+      <script type="application/json" id="arch-overview-data">{{.ArchData}}</script>
+    </div>
+
+    <div class="chart-panel">
+      <h3>Codebase Composition</h3>
+      <div id="homepage-chart"></div>
+      <script type="application/json" id="homepage-chart-data">{{.ChartData}}</script>
+    </div>
+
+    {{range .Taxonomies}}
+    {{$taxName := .Name}}
+    <div class="section">
+      <h2 class="section-title">{{.Label}}</h2>
+      <div class="tax-grid">
+        {{range .Entries}}
+        <a href="/{{$taxName}}/{{.Slug}}.html" class="tax-entry">
+          <div class="tax-entry-left">
+            <span>{{.Name}}</span>
+            {{if eq $taxName "subdomain"}}{{with (index .Entities 0).GetString "domain"}}<span class="tax-domain-tag">{{.}}</span>{{end}}{{end}}
+          </div>
+          <span class="tax-count">{{len .Entities}}</span>
+        </a>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+
+  {{if .CTA.Enabled}}
+  <div class="cta-section">
+    <h2 class="cta-heading">{{.CTA.Heading}}</h2>
+    <p class="cta-description">{{.CTA.Description}}</p>
+    <a href="{{.CTA.ButtonURL}}" class="cta-button" rel="noopener">{{.CTA.ButtonText}}</a>
+  </div>
+  {{end}}
+</main>
+
+{{template "_footer.html"}}
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="/main.js"></script>
+</body>
+</html>
