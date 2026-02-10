@@ -35,6 +35,7 @@ type APIResponse struct {
 const pssgConfigTemplate = `site:
   name: "%s"
   base_url: "%s"
+  repo_url: "%s"
   description: "Architecture documentation for the %s codebase. Explore files, functions, classes, domains, and dependencies."
   author: "Supermodel"
   language: "en"
@@ -370,7 +371,7 @@ func main() {
 	}
 
 	configPath := filepath.Join(tmpDir, "pssg.yaml")
-	if err := generateConfig(configPath, siteName, baseURL, repoName, contentDir, tplDir, outputDir, workspaceDir); err != nil {
+	if err := generateConfig(configPath, siteName, baseURL, repoURL, repoName, contentDir, tplDir, outputDir, workspaceDir); err != nil {
 		fatal("Failed to generate pssg config: %v", err)
 	}
 
@@ -711,10 +712,11 @@ func getPollInterval(resp *http.Response, defaultInterval time.Duration) time.Du
 }
 
 // generateConfig writes a pssg.yaml config file.
-func generateConfig(configPath, siteName, baseURL, repoName, contentDir, tplDir, outputDir, sourceDir string) error {
+func generateConfig(configPath, siteName, baseURL, repoURL, repoName, contentDir, tplDir, outputDir, sourceDir string) error {
 	config := fmt.Sprintf(pssgConfigTemplate,
 		siteName,       // site.name
 		baseURL,        // site.base_url
+		repoURL,        // site.repo_url
 		repoName,       // site.description
 		contentDir,     // paths.data
 		tplDir,         // paths.templates
