@@ -43,6 +43,7 @@ paths:
   data: "%s"
   templates: "%s"
   output: "%s"
+  source_dir: "%s"
 
 data:
   format: "markdown"
@@ -369,7 +370,7 @@ func main() {
 	}
 
 	configPath := filepath.Join(tmpDir, "pssg.yaml")
-	if err := generateConfig(configPath, siteName, baseURL, repoName, contentDir, tplDir, outputDir); err != nil {
+	if err := generateConfig(configPath, siteName, baseURL, repoName, contentDir, tplDir, outputDir, workspaceDir); err != nil {
 		fatal("Failed to generate pssg config: %v", err)
 	}
 
@@ -710,7 +711,7 @@ func getPollInterval(resp *http.Response, defaultInterval time.Duration) time.Du
 }
 
 // generateConfig writes a pssg.yaml config file.
-func generateConfig(configPath, siteName, baseURL, repoName, contentDir, tplDir, outputDir string) error {
+func generateConfig(configPath, siteName, baseURL, repoName, contentDir, tplDir, outputDir, sourceDir string) error {
 	config := fmt.Sprintf(pssgConfigTemplate,
 		siteName,       // site.name
 		baseURL,        // site.base_url
@@ -718,6 +719,7 @@ func generateConfig(configPath, siteName, baseURL, repoName, contentDir, tplDir,
 		contentDir,     // paths.data
 		tplDir,         // paths.templates
 		outputDir,      // paths.output
+		sourceDir,      // paths.source_dir
 		siteName,       // rss.title
 		repoName,       // rss.description
 		siteName,       // llms_txt.title
