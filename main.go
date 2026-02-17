@@ -11,11 +11,14 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/supermodeltools/arch-docs/internal/graph2md"
+	"github.com/supermodeltools/arch-docs/internal/pssg/build"
+	"github.com/supermodeltools/arch-docs/internal/pssg/config"
 )
 
 const apiBaseURL = "https://api.supermodeltools.com/v1/graphs/supermodel"
@@ -336,18 +339,7 @@ func main() {
 		fatal("Failed to create content dir: %v", err)
 	}
 
-	graph2mdArgs := []string{
-		"-input", graphPath,
-		"-output", contentDir,
-	}
-	if repoName != "" {
-		graph2mdArgs = append(graph2mdArgs, "-repo", repoName)
-	}
-	if repoURL != "" {
-		graph2mdArgs = append(graph2mdArgs, "-repo-url", repoURL)
-	}
-
-	if err := runCommand("graph2md", graph2mdArgs...); err != nil {
+	if err := graph2md.Run(graphPath, contentDir, repoName, repoURL); err != nil {
 		fatal("graph2md failed: %v", err)
 	}
 
@@ -381,7 +373,12 @@ func main() {
 		fatal("Failed to generate pssg config: %v", err)
 	}
 
-	if err := runCommand("pssg", "build", "--config", configPath); err != nil {
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		fatal("Failed to load pssg config: %v", err)
+	}
+	builder := build.NewBuilder(cfg, false)
+	if err := builder.Build(); err != nil {
 		fatal("pssg build failed: %v", err)
 	}
 
@@ -734,15 +731,6 @@ func generateConfig(configPath, siteName, baseURL, repoURL, repoName, contentDir
 		repoName,       // llms_txt.description
 	)
 	return os.WriteFile(configPath, []byte(config), 0644)
-}
-
-// runCommand executes an external command with stdout/stderr forwarding.
-func runCommand(name string, args ...string) error {
-	fmt.Printf("Running: %s %s\n", name, strings.Join(args, " "))
-	cmd := exec.Command(name, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }
 
 // extractPathPrefix returns the path component of a URL (e.g. "/graph2md" from
