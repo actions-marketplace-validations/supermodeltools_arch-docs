@@ -26,6 +26,7 @@ type Config struct {
 type SiteConfig struct {
 	Name        string `yaml:"name"`
 	BaseURL     string `yaml:"base_url"`
+	RepoURL     string `yaml:"repo_url"`
 	Description string `yaml:"description"`
 	Language    string `yaml:"language"`
 	Version     string `yaml:"version"`
