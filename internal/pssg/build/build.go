@@ -410,6 +410,7 @@ func (b *Builder) renderEntityPage(
 		AllTaxonomies:  taxonomies,
 		ValidSlugs:     validSlugs,
 		Contributors:   contributors,
+		CTA: b.cfg.Extra.CTA,
 		OG: render.OGMeta{
 			Title:       title + " \u2014 " + b.cfg.Site.Name,
 			Description: description,
@@ -551,6 +552,7 @@ func (b *Builder) renderTaxonomyPages(
 					SiteName:    b.cfg.Site.Name,
 				},
 				ChartData: template.HTML(hubChartJSON),
+				CTA:       b.cfg.Extra.CTA,
 			}
 
 			html, err := engine.RenderHub(ctx)
@@ -649,6 +651,7 @@ func (b *Builder) renderTaxonomyPages(
 			SiteName:    b.cfg.Site.Name,
 		},
 		ChartData: template.HTML(taxChartJSON),
+		CTA:       b.cfg.Extra.CTA,
 	}
 
 	html, err := engine.RenderTaxonomyIndex(ctx)
@@ -722,6 +725,7 @@ func (b *Builder) renderTaxonomyPages(
 					SiteName:    b.cfg.Site.Name,
 				},
 				ChartData: template.HTML(letterChartJSON),
+				CTA:       b.cfg.Extra.CTA,
 			}
 
 			letterHTML, err := engine.RenderLetter(letterCtx)
@@ -863,6 +867,7 @@ func (b *Builder) renderAllEntitiesPages(
 				SiteName:    b.cfg.Site.Name,
 			},
 			ChartData: pageChartData,
+			CTA:       b.cfg.Extra.CTA,
 		}
 
 		html, err := engine.RenderAllEntities(ctx)
@@ -965,6 +970,7 @@ func (b *Builder) renderHomepage(
 			SiteName:    b.cfg.Site.Name,
 		},
 		ChartData: template.HTML(chartJSON),
+		CTA:       b.cfg.Extra.CTA,
 	}
 
 	html, err := engine.RenderHomepage(ctx)

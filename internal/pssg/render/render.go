@@ -39,6 +39,7 @@ type EntityPageContext struct {
 	Contributors    map[string]interface{}
 	OG              OGMeta
 	ChartData       template.HTML
+	CTA             config.CTAConfig
 }
 
 // HomepageContext is the template context for the homepage.
@@ -52,6 +53,7 @@ type HomepageContext struct {
 	Contributors  map[string]interface{}
 	OG            OGMeta
 	ChartData     template.HTML
+	CTA           config.CTAConfig
 }
 
 // HubPageContext is the template context for taxonomy hub (category) pages.
@@ -68,6 +70,7 @@ type HubPageContext struct {
 	ContributorProfile map[string]interface{}
 	OG             OGMeta
 	ChartData      template.HTML
+	CTA            config.CTAConfig
 }
 
 // TaxonomyIndexContext is the template context for taxonomy index pages.
@@ -84,6 +87,7 @@ type TaxonomyIndexContext struct {
 	AllTaxonomies []taxonomy.Taxonomy
 	OG            OGMeta
 	ChartData     template.HTML
+	CTA           config.CTAConfig
 }
 
 // LetterPageContext is the template context for A-Z letter pages.
@@ -98,6 +102,7 @@ type LetterPageContext struct {
 	AllTaxonomies []taxonomy.Taxonomy
 	OG            OGMeta
 	ChartData     template.HTML
+	CTA           config.CTAConfig
 }
 
 // AllEntitiesPageContext is the template context for the all-entities listing pages.
@@ -111,6 +116,7 @@ type AllEntitiesPageContext struct {
 	EntityCount   int
 	OG            OGMeta
 	ChartData     template.HTML
+	CTA           config.CTAConfig
 }
 
 // StaticPageContext is the template context for static pages.
