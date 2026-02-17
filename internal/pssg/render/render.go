@@ -40,6 +40,8 @@ type EntityPageContext struct {
 	OG              OGMeta
 	ChartData       template.HTML
 	CTA             config.CTAConfig
+	SourceCode      string
+	SourceLang      string
 }
 
 // HomepageContext is the template context for the homepage.
@@ -54,6 +56,7 @@ type HomepageContext struct {
 	OG            OGMeta
 	ChartData     template.HTML
 	CTA           config.CTAConfig
+	ArchData      template.HTML
 }
 
 // HubPageContext is the template context for taxonomy hub (category) pages.
@@ -113,10 +116,11 @@ type AllEntitiesPageContext struct {
 	JsonLD        template.HTML
 	Breadcrumbs   []Breadcrumb
 	AllTaxonomies []taxonomy.Taxonomy
-	EntityCount   int
-	OG            OGMeta
-	ChartData     template.HTML
-	CTA           config.CTAConfig
+	EntityCount    int
+	TotalEntities  int
+	OG             OGMeta
+	ChartData      template.HTML
+	CTA            config.CTAConfig
 }
 
 // StaticPageContext is the template context for static pages.

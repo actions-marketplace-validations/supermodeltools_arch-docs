@@ -858,6 +858,7 @@ func (b *Builder) renderAllEntitiesPages(
 			Breadcrumbs:   breadcrumbs,
 			AllTaxonomies: allTaxonomies,
 			EntityCount:   len(entities),
+			TotalEntities: len(entities),
 			OG: render.OGMeta{
 				Title:       "All Recipes \u2014 " + b.cfg.Site.Name,
 				Description: fmt.Sprintf("Browse all %d recipes on %s.", len(entities), b.cfg.Site.Name),
