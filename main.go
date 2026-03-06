@@ -210,6 +210,7 @@ output:
   clean_before_build: true
   extract_css: "styles.css"
   extract_js: "main.js"
+  share_images: false
 
 extra:
   cta:

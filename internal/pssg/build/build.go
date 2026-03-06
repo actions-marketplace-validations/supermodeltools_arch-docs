@@ -381,7 +381,7 @@ func (b *Builder) renderEntityPage(
 		e.GetString("skill_level"),
 	)
 	svgFilename := e.Slug + ".svg"
-	if err := writeShareSVG(outDir, svgFilename, svgContent); err != nil {
+	if err := b.maybeWriteShareSVG(outDir, svgFilename, svgContent); err != nil {
 		log.Printf("Warning: failed to write entity share SVG for %s: %v", e.Slug, err)
 	}
 	imageURL := shareImageURL(b.cfg.Site.BaseURL, svgFilename)
@@ -568,7 +568,7 @@ func (b *Builder) renderTaxonomyPages(
 		hubImageURL := shareImageURL(b.cfg.Site.BaseURL, hubSVGFilename)
 		if totalPages >= 1 {
 			hubSVG := render.GenerateHubShareSVG(b.cfg.Site.Name, entry.Name, tax.Label, len(entry.Entities), typeDist)
-			if err := writeShareSVG(outDir, hubSVGFilename, hubSVG); err != nil {
+			if err := b.maybeWriteShareSVG(outDir, hubSVGFilename, hubSVG); err != nil {
 				log.Printf("Warning: failed to write hub share SVG for %s/%s: %v", tax.Name, entry.Slug, err)
 			}
 		}
@@ -698,7 +698,7 @@ func (b *Builder) renderTaxonomyPages(
 	}
 	taxIndexSVGFilename := fmt.Sprintf("%s-index.svg", tax.Name)
 	taxIndexSVG := render.GenerateTaxIndexShareSVG(b.cfg.Site.Name, tax.Label, taxIndexEntries)
-	if err := writeShareSVG(outDir, taxIndexSVGFilename, taxIndexSVG); err != nil {
+	if err := b.maybeWriteShareSVG(outDir, taxIndexSVGFilename, taxIndexSVG); err != nil {
 		log.Printf("Warning: failed to write taxonomy index share SVG for %s: %v", tax.Name, err)
 	}
 	taxIndexImageURL := shareImageURL(b.cfg.Site.BaseURL, taxIndexSVGFilename)
@@ -773,7 +773,7 @@ func (b *Builder) renderTaxonomyPages(
 			}
 			letterSVGFilename := fmt.Sprintf("%s-letter-%s.svg", tax.Name, letterSlug)
 			letterSVG := render.GenerateLetterShareSVG(b.cfg.Site.Name, tax.Label, lg.Letter, len(lg.Entries))
-			if err := writeShareSVG(outDir, letterSVGFilename, letterSVG); err != nil {
+			if err := b.maybeWriteShareSVG(outDir, letterSVGFilename, letterSVG); err != nil {
 				log.Printf("Warning: failed to write letter share SVG for %s/%s: %v", tax.Name, lg.Letter, err)
 			}
 			letterImageURL := shareImageURL(b.cfg.Site.BaseURL, letterSVGFilename)
@@ -863,7 +863,7 @@ func (b *Builder) renderAllEntitiesPages(
 
 	// Share image (once)
 	allSVG := render.GenerateAllEntitiesShareSVG(b.cfg.Site.Name, len(entities), typeDist)
-	if err := writeShareSVG(outDir, "all-entities.svg", allSVG); err != nil {
+	if err := b.maybeWriteShareSVG(outDir, "all-entities.svg", allSVG); err != nil {
 		log.Printf("Warning: failed to write all-entities share SVG: %v", err)
 	}
 	imageURL := shareImageURL(b.cfg.Site.BaseURL, "all-entities.svg")
@@ -1005,7 +1005,7 @@ func (b *Builder) renderHomepage(
 		taxStats = append(taxStats, render.NameCount{Name: tax.Label, Count: len(tax.Entries)})
 	}
 	svgContent := render.GenerateHomepageShareSVG(b.cfg.Site.Name, b.cfg.Site.Description, taxStats, len(entities))
-	if err := writeShareSVG(outDir, "homepage.svg", svgContent); err != nil {
+	if err := b.maybeWriteShareSVG(outDir, "homepage.svg", svgContent); err != nil {
 		log.Printf("Warning: failed to write homepage share SVG: %v", err)
 	}
 	imageURL := shareImageURL(b.cfg.Site.BaseURL, "homepage.svg")
@@ -1261,6 +1261,14 @@ func writeShareSVG(outDir, filename, svg string) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, filename), []byte(svg), 0644)
+}
+
+// maybeWriteShareSVG skips SVG generation when output.share_images is false.
+func (b *Builder) maybeWriteShareSVG(outDir, filename, svg string) error {
+	if !b.cfg.Output.ShareImages {
+		return nil
+	}
+	return writeShareSVG(outDir, filename, svg)
 }
 
 // shareImageURL returns the full URL for a share image.

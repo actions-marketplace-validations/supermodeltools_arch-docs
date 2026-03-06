@@ -154,6 +154,7 @@ type OutputConfig struct {
 	Minify      bool   `yaml:"minify"`
 	ExtractCSS  string `yaml:"extract_css"`
 	ExtractJS   string `yaml:"extract_js"`
+	ShareImages bool   `yaml:"share_images"`
 }
 
 type ExtraConfig struct {
