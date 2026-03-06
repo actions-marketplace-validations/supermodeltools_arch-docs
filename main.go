@@ -232,6 +232,19 @@ func main() {
 	outputDir := getInput("output-dir")
 	templatesDir := getInput("templates-dir")
 
+	maxSourceFiles := 3000
+	if v := getInput("max-source-files"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			maxSourceFiles = n
+		}
+	}
+	maxEntities := 12000
+	if v := getInput("max-entities"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			maxEntities = n
+		}
+	}
+
 	if outputDir == "" {
 		outputDir = "./arch-docs-output"
 	}
@@ -298,7 +311,10 @@ func main() {
 
 	// Step 3: Zip the repo
 	logGroup("Creating repository archive")
-	zipPath, err := createRepoZip(workspaceDir)
+	if maxSourceFiles > 0 {
+		fmt.Printf("Source file cap: %d\n", maxSourceFiles)
+	}
+	zipPath, err := createRepoZip(workspaceDir, maxSourceFiles)
 	if err != nil {
 		fatal("Failed to create repo zip: %v", err)
 	}
@@ -339,7 +355,7 @@ func main() {
 		fatal("Failed to create content dir: %v", err)
 	}
 
-	if err := graph2md.Run(graphPath, contentDir, repoName, repoURL); err != nil {
+	if err := graph2md.Run(graphPath, contentDir, repoName, repoURL, maxEntities); err != nil {
 		fatal("graph2md failed: %v", err)
 	}
 
@@ -459,7 +475,8 @@ func fatal(format string, args ...interface{}) {
 
 // createRepoZip walks the workspace directory and creates a zip archive.
 // It skips .git/, node_modules/, binary files, and files > 10MB.
-func createRepoZip(workspaceDir string) (string, error) {
+// If maxFiles > 0, stops after that many files are archived.
+func createRepoZip(workspaceDir string, maxFiles int) (string, error) {
 	tmpFile, err := os.CreateTemp("", "repo-*.zip")
 	if err != nil {
 		return "", fmt.Errorf("creating temp file: %w", err)
@@ -557,6 +574,10 @@ func createRepoZip(workspaceDir string) (string, error) {
 		}
 
 		fileCount++
+		if maxFiles > 0 && fileCount >= maxFiles {
+			fmt.Printf("Source file cap reached (%d), stopping archive\n", maxFiles)
+			return filepath.SkipAll
+		}
 		return nil
 	})
 

@@ -90,7 +90,7 @@ type Artifact struct {
 
 // Run executes graph2md conversion. inputFiles is a comma-separated list of
 // paths to graph JSON files. outputDir is the directory for markdown output.
-func Run(inputFiles, outputDir, repoName, repoURL string) error {
+func Run(inputFiles, outputDir, repoName, repoURL string, maxEntities int) error {
 	if inputFiles == "" {
 		return fmt.Errorf("input is required (comma-separated paths to graph JSON files)")
 	}
@@ -382,6 +382,38 @@ func Run(inputFiles, outputDir, repoName, repoURL string) error {
 	}
 
 	log.Printf("Pass 1 complete: %d slugs generated", len(entries))
+
+	// Cap entities by priority + connectivity to stay within CF Pages 20k file limit.
+	if maxEntities > 0 && len(entries) > maxEntities {
+		// Score each node by relationship degree (higher = more architecturally central)
+		degree := make(map[string]int)
+		for _, rel := range allRels {
+			degree[rel.StartNode]++
+			degree[rel.EndNode]++
+		}
+		// Label priority: structural first, then files, then symbols
+		labelPriority := map[string]int{
+			"Domain": 0, "Subdomain": 1, "Directory": 2,
+			"File": 3, "Class": 4, "Type": 5, "Function": 6,
+		}
+		sort.SliceStable(entries, func(i, j int) bool {
+			pi := labelPriority[entries[i].label]
+			pj := labelPriority[entries[j].label]
+			if pi != pj {
+				return pi < pj
+			}
+			return degree[entries[i].node.ID] > degree[entries[j].node.ID]
+		})
+		log.Printf("Capping entities from %d to %d (max-entities limit)", len(entries), maxEntities)
+		entries = entries[:maxEntities]
+		// Rebuild slugLookup to only reference kept entries; dropped entities
+		// will degrade to plain text in internal links.
+		newSlugLookup := make(map[string]string, len(entries))
+		for _, e := range entries {
+			newSlugLookup[e.node.ID] = e.slug
+		}
+		slugLookup = newSlugLookup
+	}
 
 	// --- Pass 2: Generate markdown with internal links ---
 	var count int

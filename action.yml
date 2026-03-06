@@ -25,6 +25,14 @@ inputs:
     description: 'Custom templates directory (overrides bundled defaults)'
     required: false
     default: ''
+  max-source-files:
+    description: 'Cap on source files included in the zip sent to the API (0 = unlimited, default: 3000)'
+    required: false
+    default: '3000'
+  max-entities:
+    description: 'Cap on entity pages generated (0 = unlimited, default: 12000). Prioritizes Domain > Subdomain > Directory > File > Class/Type/Function by connectivity.'
+    required: false
+    default: '12000'
 
 outputs:
   site-path:
