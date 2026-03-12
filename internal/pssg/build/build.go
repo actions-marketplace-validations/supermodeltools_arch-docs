@@ -395,70 +395,68 @@ func (b *Builder) renderEntityPage(
 	description := e.GetString("description")
 
 	// Entity profile chart data (compact format for JS)
+	// Always include metrics so empty values are visible (helps diagnose API gaps)
+	nodeType := e.GetString("node_type")
 	profileData := map[string]interface{}{}
-	if lc := e.GetInt("line_count"); lc > 0 {
-		profileData["lc"] = lc
+
+	profileData["lc"] = e.GetInt("line_count")
+
+	switch nodeType {
+	case "Function":
+		profileData["co"] = e.GetInt("call_count")
+		profileData["cb"] = e.GetInt("called_by_count")
+	case "File":
+		profileData["ic"] = e.GetInt("import_count")
+		profileData["ib"] = e.GetInt("imported_by_count")
+		profileData["fn"] = e.GetInt("function_count")
+		profileData["cl"] = e.GetInt("class_count")
+		profileData["tc"] = e.GetInt("type_count")
+	case "Class", "Type":
+		profileData["fn"] = e.GetInt("function_count")
+		profileData["cb"] = e.GetInt("called_by_count")
+	case "Directory":
+		profileData["fc"] = e.GetInt("file_count")
+		profileData["fn"] = e.GetInt("function_count")
+		profileData["cl"] = e.GetInt("class_count")
+	default:
+		// Domain, Subdomain, etc — include whatever is available
+		if v := e.GetInt("function_count"); v > 0 {
+			profileData["fn"] = v
+		}
+		if v := e.GetInt("file_count"); v > 0 {
+			profileData["fc"] = v
+		}
 	}
-	if co := e.GetInt("call_count"); co > 0 {
-		profileData["co"] = co
-	}
-	if cb := e.GetInt("called_by_count"); cb > 0 {
-		profileData["cb"] = cb
-	}
-	if ic := e.GetInt("import_count"); ic > 0 {
-		profileData["ic"] = ic
-	}
-	if ib := e.GetInt("imported_by_count"); ib > 0 {
-		profileData["ib"] = ib
-	}
-	if fn := e.GetInt("function_count"); fn > 0 {
-		profileData["fn"] = fn
-	}
-	if cl := e.GetInt("class_count"); cl > 0 {
-		profileData["cl"] = cl
-	}
-	if tc := e.GetInt("type_count"); tc > 0 {
-		profileData["tc"] = tc
-	}
-	if fc := e.GetInt("file_count"); fc > 0 {
-		profileData["fc"] = fc
-	}
+
 	if sl := e.GetInt("start_line"); sl > 0 {
 		profileData["sl"] = sl
 	}
 	if el := e.GetInt("end_line"); el > 0 {
 		profileData["el"] = el
 	}
+
 	// Edge type breakdown
 	edgeTypes := map[string]int{}
-	if v := e.GetInt("import_count"); v > 0 {
-		edgeTypes["imports"] = v
+	ic := e.GetInt("import_count")
+	ibc := e.GetInt("imported_by_count")
+	if ic+ibc > 0 {
+		edgeTypes["imports"] = ic + ibc
 	}
-	if v := e.GetInt("imported_by_count"); v > 0 {
-		edgeTypes["imports"] += v
+	co := e.GetInt("call_count")
+	cbc := e.GetInt("called_by_count")
+	if co+cbc > 0 {
+		edgeTypes["calls"] = co + cbc
 	}
-	if v := e.GetInt("call_count"); v > 0 {
-		edgeTypes["calls"] = v
-	}
-	if v := e.GetInt("called_by_count"); v > 0 {
-		edgeTypes["calls"] += v
-	}
-	if v := e.GetInt("function_count"); v > 0 {
-		edgeTypes["defines"] += v
-	}
-	if v := e.GetInt("class_count"); v > 0 {
-		edgeTypes["defines"] += v
-	}
-	if v := e.GetInt("type_count"); v > 0 {
-		edgeTypes["defines"] += v
+	defines := e.GetInt("function_count") + e.GetInt("class_count") + e.GetInt("type_count")
+	if defines > 0 {
+		edgeTypes["defines"] = defines
 	}
 	if len(edgeTypes) > 0 {
 		profileData["et"] = edgeTypes
 	}
+
 	var entityChartJSON []byte
-	if len(profileData) > 0 {
-		entityChartJSON, _ = json.Marshal(profileData)
-	}
+	entityChartJSON, _ = json.Marshal(profileData)
 
 	// Source code (read from workspace if available)
 	var sourceCode, sourceLang string

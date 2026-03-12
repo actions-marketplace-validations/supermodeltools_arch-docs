@@ -617,6 +617,19 @@ func (c *renderContext) writeFileFrontmatter(sb *strings.Builder) {
 		sb.WriteString(fmt.Sprintf("subdomain: %q\n", s))
 	}
 
+	// File line count: use lineCount property, or compute from endLine
+	if lc := getNum(props, "lineCount"); lc > 0 {
+		sb.WriteString(fmt.Sprintf("line_count: %d\n", lc))
+	} else if endLine := getNum(props, "endLine"); endLine > 0 {
+		startLine := getNum(props, "startLine")
+		if startLine <= 0 {
+			startLine = 1
+		}
+		sb.WriteString(fmt.Sprintf("start_line: %d\n", startLine))
+		sb.WriteString(fmt.Sprintf("end_line: %d\n", endLine))
+		sb.WriteString(fmt.Sprintf("line_count: %d\n", endLine-startLine+1))
+	}
+
 	sb.WriteString(fmt.Sprintf("import_count: %d\n", depCount))
 	sb.WriteString(fmt.Sprintf("imported_by_count: %d\n", ibCount))
 
