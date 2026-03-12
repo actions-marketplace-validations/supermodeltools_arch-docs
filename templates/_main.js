@@ -227,9 +227,16 @@ window.addEventListener("load", function() {
 
       var hasMetrics = metrics.length > 0;
       var hasEdges = edgeTypes.length > 0;
+      var hasFileBar = ep.sl > 0 && ep.el > 0;
+
+      if (!hasMetrics && !hasEdges && !hasFileBar) {
+        var epPanel = epChartEl.closest(".chart-panel, .entity-profile-panel");
+        if (epPanel) epPanel.style.display = "none";
+      }
+
       var metricsH = hasMetrics ? metrics.length * 32 + 8 : 0;
       var edgesH = hasEdges ? Math.max(edgeTypes.length * 22 + 40, 56) : 0;
-      var fileBarH = (ep.sl > 0 && ep.el > 0) ? 44 : 0;
+      var fileBarH = hasFileBar ? 44 : 0;
       var totalH = metricsH + edgesH + fileBarH + 4;
       if (totalH < 40) totalH = 40;
 
