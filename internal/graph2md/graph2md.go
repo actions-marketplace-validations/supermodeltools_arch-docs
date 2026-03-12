@@ -879,6 +879,16 @@ func (c *renderContext) writeDirectoryFrontmatter(sb *strings.Builder) {
 	fileCount := len(c.containsFile[c.node.ID])
 	subdirCount := len(c.childDir[c.node.ID])
 
+	// Aggregate function/class/type counts from contained files
+	funcCount := 0
+	classCount := 0
+	typeCount := 0
+	for _, fileID := range c.containsFile[c.node.ID] {
+		funcCount += len(c.definesFunc[fileID])
+		classCount += len(c.declaresClass[fileID])
+		typeCount += len(c.definesType[fileID])
+	}
+
 	title := fmt.Sprintf("%s/ — %s Directory Structure", path, c.repoName)
 	desc := fmt.Sprintf("Directory listing for %s/ in the %s codebase. Contains %d files and %d subdirectories.", path, c.repoName, fileCount, subdirCount)
 
@@ -890,6 +900,9 @@ func (c *renderContext) writeDirectoryFrontmatter(sb *strings.Builder) {
 	sb.WriteString(fmt.Sprintf("repo: %q\n", c.repoName))
 	sb.WriteString(fmt.Sprintf("file_count: %d\n", fileCount))
 	sb.WriteString(fmt.Sprintf("subdir_count: %d\n", subdirCount))
+	sb.WriteString(fmt.Sprintf("function_count: %d\n", funcCount))
+	sb.WriteString(fmt.Sprintf("class_count: %d\n", classCount))
+	sb.WriteString(fmt.Sprintf("type_count: %d\n", typeCount))
 
 	parts := strings.Split(path, "/")
 	if len(parts) > 0 {
