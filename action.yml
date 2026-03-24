@@ -9,6 +9,10 @@ inputs:
   supermodel-api-key:
     description: 'Supermodel API key from https://supermodeltools.com'
     required: true
+  repo:
+    description: 'Repository being analyzed (owner/repo). Overrides GITHUB_REPOSITORY, which cannot be set in Docker container actions when analyzing a different repo.'
+    required: false
+    default: ''
   site-name:
     description: 'Display name for the docs site (default: repo name + "Architecture Docs")'
     required: false
