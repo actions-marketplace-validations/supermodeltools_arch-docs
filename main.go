@@ -251,7 +251,12 @@ func main() {
 	}
 
 	// Step 2: Derive repo info
-	ghRepo := os.Getenv("GITHUB_REPOSITORY") // e.g. "owner/repo"
+	// Allow the workflow to pass the customer repo explicitly via the "repo" input,
+	// since GITHUB_REPOSITORY cannot be overridden in Docker container actions.
+	ghRepo := getInput("repo")
+	if ghRepo == "" {
+		ghRepo = os.Getenv("GITHUB_REPOSITORY") // e.g. "owner/repo"
+	}
 	repoName := ""
 	repoURL := ""
 	if ghRepo != "" {
