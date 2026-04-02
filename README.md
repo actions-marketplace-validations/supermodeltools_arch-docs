@@ -1,4 +1,4 @@
-> **This repository is deprecated.** Architecture documentation is now generated via the [Supermodel CLI](https://github.com/supermodeltools/cli) using the `supermodel arch-docs` command.
+> **This repository is deprecated.** Architecture documentation is now generated via the [Supermodel CLI](https://github.com/supermodeltools/cli) using the `supermodel docs` command.
 
 ---
 
