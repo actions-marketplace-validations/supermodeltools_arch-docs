@@ -1,3 +1,7 @@
+> **This repository is deprecated.** Architecture documentation is now generated via the [Supermodel CLI](https://github.com/supermodeltools/cli) using the `supermodel arch-docs` command.
+
+---
+
 # arch-docs
 
 [![Go 1.25](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev)
