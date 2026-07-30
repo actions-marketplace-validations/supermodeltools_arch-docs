@@ -42,6 +42,7 @@ type PathsConfig struct {
 	Output    string `yaml:"output"`
 	Cache     string `yaml:"cache"`
 	Static    string `yaml:"static"`
+	SourceDir string `yaml:"source_dir"`
 }
 
 type DataConfig struct {
@@ -153,6 +154,7 @@ type OutputConfig struct {
 	Minify      bool   `yaml:"minify"`
 	ExtractCSS  string `yaml:"extract_css"`
 	ExtractJS   string `yaml:"extract_js"`
+	ShareImages bool   `yaml:"share_images"`
 }
 
 type ExtraConfig struct {

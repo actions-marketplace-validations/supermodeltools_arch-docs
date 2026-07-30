@@ -381,7 +381,7 @@ func (b *Builder) renderEntityPage(
 		e.GetString("skill_level"),
 	)
 	svgFilename := e.Slug + ".svg"
-	if err := writeShareSVG(outDir, svgFilename, svgContent); err != nil {
+	if err := b.maybeWriteShareSVG(outDir, svgFilename, svgContent); err != nil {
 		log.Printf("Warning: failed to write entity share SVG for %s: %v", e.Slug, err)
 	}
 	imageURL := shareImageURL(b.cfg.Site.BaseURL, svgFilename)
@@ -393,6 +393,100 @@ func (b *Builder) renderEntityPage(
 
 	title := e.GetString("title")
 	description := e.GetString("description")
+
+	// Entity profile chart data (compact format for JS)
+	// Always include metrics so empty values are visible (helps diagnose API gaps)
+	nodeType := e.GetString("node_type")
+	profileData := map[string]interface{}{}
+
+	profileData["lc"] = e.GetInt("line_count")
+
+	switch nodeType {
+	case "Function":
+		profileData["co"] = e.GetInt("call_count")
+		profileData["cb"] = e.GetInt("called_by_count")
+	case "File":
+		profileData["ic"] = e.GetInt("import_count")
+		profileData["ib"] = e.GetInt("imported_by_count")
+		profileData["fn"] = e.GetInt("function_count")
+		profileData["cl"] = e.GetInt("class_count")
+		profileData["tc"] = e.GetInt("type_count")
+	case "Class", "Type":
+		profileData["fn"] = e.GetInt("function_count")
+		profileData["cb"] = e.GetInt("called_by_count")
+	case "Directory":
+		profileData["fc"] = e.GetInt("file_count")
+		profileData["fn"] = e.GetInt("function_count")
+		profileData["cl"] = e.GetInt("class_count")
+	default:
+		// Domain, Subdomain, etc — include whatever is available
+		if v := e.GetInt("function_count"); v > 0 {
+			profileData["fn"] = v
+		}
+		if v := e.GetInt("file_count"); v > 0 {
+			profileData["fc"] = v
+		}
+	}
+
+	if sl := e.GetInt("start_line"); sl > 0 {
+		profileData["sl"] = sl
+	}
+	if el := e.GetInt("end_line"); el > 0 {
+		profileData["el"] = el
+	}
+
+	// Edge type breakdown
+	edgeTypes := map[string]int{}
+	ic := e.GetInt("import_count")
+	ibc := e.GetInt("imported_by_count")
+	if ic+ibc > 0 {
+		edgeTypes["imports"] = ic + ibc
+	}
+	co := e.GetInt("call_count")
+	cbc := e.GetInt("called_by_count")
+	if co+cbc > 0 {
+		edgeTypes["calls"] = co + cbc
+	}
+	defines := e.GetInt("function_count") + e.GetInt("class_count") + e.GetInt("type_count")
+	if defines > 0 {
+		edgeTypes["defines"] = defines
+	}
+	if len(edgeTypes) > 0 {
+		profileData["et"] = edgeTypes
+	}
+
+	var entityChartJSON []byte
+	entityChartJSON, _ = json.Marshal(profileData)
+
+	// Source code (read from workspace if available)
+	var sourceCode, sourceLang string
+	if filePath := e.GetString("file_path"); filePath != "" {
+		if sl := e.GetInt("start_line"); sl > 0 {
+			if el := e.GetInt("end_line"); el > 0 {
+				sourceDir := b.cfg.Paths.SourceDir
+				if sourceDir != "" {
+					fullPath := filepath.Join(sourceDir, filePath)
+					if data, err := os.ReadFile(fullPath); err == nil {
+						lines := strings.Split(string(data), "\n")
+						if sl <= len(lines) && el <= len(lines) {
+							sourceCode = strings.Join(lines[sl-1:el], "\n")
+						}
+					}
+				}
+			}
+		}
+		sourceLang = e.GetString("language")
+		if sourceLang == "" {
+			ext := filepath.Ext(filePath)
+			langMap := map[string]string{
+				".js": "javascript", ".ts": "typescript", ".tsx": "typescript",
+				".py": "python", ".go": "go", ".rs": "rust", ".java": "java",
+				".rb": "ruby", ".php": "php", ".c": "c", ".cpp": "cpp",
+				".cs": "csharp", ".swift": "swift", ".kt": "kotlin",
+			}
+			sourceLang = langMap[ext]
+		}
+	}
 
 	ctx := render.EntityPageContext{
 		Site:           b.cfg.Site,
@@ -410,6 +504,9 @@ func (b *Builder) renderEntityPage(
 		AllTaxonomies:  taxonomies,
 		ValidSlugs:     validSlugs,
 		Contributors:   contributors,
+		ChartData:      template.JS(entityChartJSON),
+		SourceCode:     sourceCode,
+		SourceLang:     sourceLang,
 		CTA: b.cfg.Extra.CTA,
 		OG: render.OGMeta{
 			Title:       title + " \u2014 " + b.cfg.Site.Name,
@@ -469,21 +566,72 @@ func (b *Builder) renderTaxonomyPages(
 		hubImageURL := shareImageURL(b.cfg.Site.BaseURL, hubSVGFilename)
 		if totalPages >= 1 {
 			hubSVG := render.GenerateHubShareSVG(b.cfg.Site.Name, entry.Name, tax.Label, len(entry.Entities), typeDist)
-			if err := writeShareSVG(outDir, hubSVGFilename, hubSVG); err != nil {
+			if err := b.maybeWriteShareSVG(outDir, hubSVGFilename, hubSVG); err != nil {
 				log.Printf("Warning: failed to write hub share SVG for %s/%s: %v", tax.Name, entry.Slug, err)
 			}
 		}
 
 		// Hub chart data (same for all pages)
+		// Build distributions: breakdown by each taxonomy field (except the current one)
+		distFields := []struct {
+			Key   string
+			Field string
+		}{
+			{"node_type", "node_type"},
+			{"language", "language"},
+			{"domain", "domain"},
+			{"extension", "extension"},
+		}
+		distributions := make(map[string][]render.NameCount)
+		for _, df := range distFields {
+			if df.Key == tax.Name {
+				continue // skip the current taxonomy dimension
+			}
+			dist := countFieldDistribution(entry.Entities, df.Field, 8)
+			if len(dist) > 0 {
+				distributions[df.Key] = dist
+			}
+		}
+
+		// Build topEntities: largest by line count
+		type topEntity struct {
+			Name  string `json:"name"`
+			Type  string `json:"type"`
+			Lines int    `json:"lines"`
+			Slug  string `json:"slug"`
+		}
+		var topEnts []topEntity
+		for _, e := range entry.Entities {
+			lc := e.GetInt("line_count")
+			if lc > 0 {
+				topEnts = append(topEnts, topEntity{
+					Name:  e.GetString("title"),
+					Type:  e.GetString("node_type"),
+					Lines: lc,
+					Slug:  e.Slug,
+				})
+			}
+		}
+		sort.Slice(topEnts, func(i, j int) bool {
+			return topEnts[i].Lines > topEnts[j].Lines
+		})
+		if len(topEnts) > 10 {
+			topEnts = topEnts[:10]
+		}
+
 		type hubChart struct {
-			EntryName        string             `json:"entryName"`
-			TotalEntities    int                `json:"totalEntities"`
-			TypeDistribution []render.NameCount `json:"typeDistribution"`
+			EntryName        string                        `json:"entryName"`
+			TotalEntities    int                           `json:"totalEntities"`
+			TypeDistribution []render.NameCount            `json:"typeDistribution"`
+			Distributions    map[string][]render.NameCount `json:"distributions"`
+			TopEntities      []topEntity                   `json:"topEntities"`
 		}
 		hubChartJSON, _ := json.Marshal(hubChart{
 			EntryName:        entry.Name,
 			TotalEntities:    len(entry.Entities),
 			TypeDistribution: typeDist,
+			Distributions:    distributions,
+			TopEntities:      topEnts,
 		})
 
 		for page := 1; page <= totalPages; page++ {
@@ -551,7 +699,7 @@ func (b *Builder) renderTaxonomyPages(
 					Type:        "article",
 					SiteName:    b.cfg.Site.Name,
 				},
-				ChartData: template.HTML(hubChartJSON),
+				ChartData: template.JS(hubChartJSON),
 				CTA:       b.cfg.Extra.CTA,
 			}
 
@@ -599,7 +747,7 @@ func (b *Builder) renderTaxonomyPages(
 	}
 	taxIndexSVGFilename := fmt.Sprintf("%s-index.svg", tax.Name)
 	taxIndexSVG := render.GenerateTaxIndexShareSVG(b.cfg.Site.Name, tax.Label, taxIndexEntries)
-	if err := writeShareSVG(outDir, taxIndexSVGFilename, taxIndexSVG); err != nil {
+	if err := b.maybeWriteShareSVG(outDir, taxIndexSVGFilename, taxIndexSVG); err != nil {
 		log.Printf("Warning: failed to write taxonomy index share SVG for %s: %v", tax.Name, err)
 	}
 	taxIndexImageURL := shareImageURL(b.cfg.Site.BaseURL, taxIndexSVGFilename)
@@ -650,7 +798,7 @@ func (b *Builder) renderTaxonomyPages(
 			Type:        "article",
 			SiteName:    b.cfg.Site.Name,
 		},
-		ChartData: template.HTML(taxChartJSON),
+		ChartData: template.JS(taxChartJSON),
 		CTA:       b.cfg.Extra.CTA,
 	}
 
@@ -674,7 +822,7 @@ func (b *Builder) renderTaxonomyPages(
 			}
 			letterSVGFilename := fmt.Sprintf("%s-letter-%s.svg", tax.Name, letterSlug)
 			letterSVG := render.GenerateLetterShareSVG(b.cfg.Site.Name, tax.Label, lg.Letter, len(lg.Entries))
-			if err := writeShareSVG(outDir, letterSVGFilename, letterSVG); err != nil {
+			if err := b.maybeWriteShareSVG(outDir, letterSVGFilename, letterSVG); err != nil {
 				log.Printf("Warning: failed to write letter share SVG for %s/%s: %v", tax.Name, lg.Letter, err)
 			}
 			letterImageURL := shareImageURL(b.cfg.Site.BaseURL, letterSVGFilename)
@@ -724,7 +872,7 @@ func (b *Builder) renderTaxonomyPages(
 					Type:        "article",
 					SiteName:    b.cfg.Site.Name,
 				},
-				ChartData: template.HTML(letterChartJSON),
+				ChartData: template.JS(letterChartJSON),
 				CTA:       b.cfg.Extra.CTA,
 			}
 
@@ -764,7 +912,7 @@ func (b *Builder) renderAllEntitiesPages(
 
 	// Share image (once)
 	allSVG := render.GenerateAllEntitiesShareSVG(b.cfg.Site.Name, len(entities), typeDist)
-	if err := writeShareSVG(outDir, "all-entities.svg", allSVG); err != nil {
+	if err := b.maybeWriteShareSVG(outDir, "all-entities.svg", allSVG); err != nil {
 		log.Printf("Warning: failed to write all-entities share SVG: %v", err)
 	}
 	imageURL := shareImageURL(b.cfg.Site.BaseURL, "all-entities.svg")
@@ -845,9 +993,9 @@ func (b *Builder) renderAllEntitiesPages(
 		jsonLD := schema.MarshalSchemas(collectionSchema, breadcrumbSchema)
 
 		// Only include chart data on page 1
-		var pageChartData template.HTML
+		var pageChartData template.JS
 		if page == 1 {
-			pageChartData = template.HTML(chartJSON)
+			pageChartData = template.JS(chartJSON)
 		}
 
 		ctx := render.AllEntitiesPageContext{
@@ -906,19 +1054,16 @@ func (b *Builder) renderHomepage(
 		taxStats = append(taxStats, render.NameCount{Name: tax.Label, Count: len(tax.Entries)})
 	}
 	svgContent := render.GenerateHomepageShareSVG(b.cfg.Site.Name, b.cfg.Site.Description, taxStats, len(entities))
-	if err := writeShareSVG(outDir, "homepage.svg", svgContent); err != nil {
+	if err := b.maybeWriteShareSVG(outDir, "homepage.svg", svgContent); err != nil {
 		log.Printf("Warning: failed to write homepage share SVG: %v", err)
 	}
 	imageURL := shareImageURL(b.cfg.Site.BaseURL, "homepage.svg")
 
-	// Chart data: treemap of taxonomies -> entries
-	type chartEntry struct {
+	// Chart data: treemap of taxonomies
+	type chartTax struct {
 		Name  string `json:"name"`
 		Count int    `json:"count"`
-	}
-	type chartTax struct {
-		Label      string       `json:"label"`
-		TopEntries []chartEntry `json:"topEntries"`
+		Slug  string `json:"slug"`
 	}
 	type homepageChart struct {
 		Taxonomies    []chartTax `json:"taxonomies"`
@@ -926,14 +1071,99 @@ func (b *Builder) renderHomepage(
 	}
 	var chartTaxonomies []chartTax
 	for _, tax := range taxonomies {
-		top := taxonomy.TopEntries(tax.Entries, 10)
-		var entries []chartEntry
-		for _, e := range top {
-			entries = append(entries, chartEntry{Name: e.Name, Count: len(e.Entities)})
+		totalCount := 0
+		for _, entry := range tax.Entries {
+			totalCount += len(entry.Entities)
 		}
-		chartTaxonomies = append(chartTaxonomies, chartTax{Label: tax.Label, TopEntries: entries})
+		chartTaxonomies = append(chartTaxonomies, chartTax{
+			Name:  tax.Label,
+			Count: totalCount,
+			Slug:  tax.Name,
+		})
 	}
 	chartJSON, _ := json.Marshal(homepageChart{Taxonomies: chartTaxonomies, TotalEntities: len(entities)})
+
+	// Architecture overview: domain/subdomain force graph
+	type archNode struct {
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Type  string `json:"type"`
+		Count int    `json:"count"`
+		Slug  string `json:"slug,omitempty"`
+	}
+	type archLink struct {
+		Source string `json:"source"`
+		Target string `json:"target"`
+	}
+	type archOverview struct {
+		Nodes []archNode `json:"nodes"`
+		Links []archLink `json:"links"`
+	}
+
+	var archNodes []archNode
+	var archLinks []archLink
+
+	// Root node is the repo/site
+	rootID := "__root__"
+	archNodes = append(archNodes, archNode{ID: rootID, Name: b.cfg.Site.Name, Type: "root", Count: len(entities)})
+
+	// Find subdomain -> domain parent relationships
+	subdomainParent := make(map[string]string) // subdomain name -> domain name
+	for _, tax := range taxonomies {
+		if tax.Name == "subdomain" {
+			for _, entry := range tax.Entries {
+				parentDomain := ""
+				if len(entry.Entities) > 0 {
+					parentDomain = entry.Entities[0].GetString("domain")
+				}
+				subdomainParent[entry.Name] = parentDomain
+			}
+		}
+	}
+
+	// Add domain nodes
+	for _, tax := range taxonomies {
+		if tax.Name == "domain" {
+			for _, entry := range tax.Entries {
+				nodeID := "domain:" + entry.Slug
+				archNodes = append(archNodes, archNode{
+					ID:    nodeID,
+					Name:  entry.Name,
+					Type:  "domain",
+					Count: len(entry.Entities),
+					Slug:  "domain/" + entry.Slug,
+				})
+				archLinks = append(archLinks, archLink{Source: rootID, Target: nodeID})
+			}
+		}
+	}
+	// Add subdomain nodes
+	for _, tax := range taxonomies {
+		if tax.Name == "subdomain" {
+			for _, entry := range tax.Entries {
+				nodeID := "subdomain:" + entry.Slug
+				archNodes = append(archNodes, archNode{
+					ID:    nodeID,
+					Name:  entry.Name,
+					Type:  "subdomain",
+					Count: len(entry.Entities),
+					Slug:  "subdomain/" + entry.Slug,
+				})
+				parentDomain := subdomainParent[entry.Name]
+				if parentDomain != "" {
+					parentSlug := entity.ToSlug(parentDomain)
+					archLinks = append(archLinks, archLink{Source: "domain:" + parentSlug, Target: nodeID})
+				} else {
+					archLinks = append(archLinks, archLink{Source: rootID, Target: nodeID})
+				}
+			}
+		}
+	}
+
+	var archJSON []byte
+	if len(archNodes) > 1 {
+		archJSON, _ = json.Marshal(archOverview{Nodes: archNodes, Links: archLinks})
+	}
 
 	// JSON-LD
 	websiteSchema := schemaGen.GenerateWebSiteSchema(imageURL)
@@ -970,7 +1200,8 @@ func (b *Builder) renderHomepage(
 			Type:        "website",
 			SiteName:    b.cfg.Site.Name,
 		},
-		ChartData: template.HTML(chartJSON),
+		ChartData: template.JS(chartJSON),
+		ArchData:  template.JS(archJSON),
 		CTA:       b.cfg.Extra.CTA,
 	}
 
@@ -1079,6 +1310,14 @@ func writeShareSVG(outDir, filename, svg string) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, filename), []byte(svg), 0644)
+}
+
+// maybeWriteShareSVG skips SVG generation when output.share_images is false.
+func (b *Builder) maybeWriteShareSVG(outDir, filename, svg string) error {
+	if !b.cfg.Output.ShareImages {
+		return nil
+	}
+	return writeShareSVG(outDir, filename, svg)
 }
 
 // shareImageURL returns the full URL for a share image.

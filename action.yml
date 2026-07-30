@@ -9,6 +9,10 @@ inputs:
   supermodel-api-key:
     description: 'Supermodel API key from https://supermodeltools.com'
     required: true
+  repo:
+    description: 'Repository being analyzed (owner/repo). Overrides GITHUB_REPOSITORY, which cannot be set in Docker container actions when analyzing a different repo.'
+    required: false
+    default: ''
   site-name:
     description: 'Display name for the docs site (default: repo name + "Architecture Docs")'
     required: false
@@ -25,6 +29,14 @@ inputs:
     description: 'Custom templates directory (overrides bundled defaults)'
     required: false
     default: ''
+  max-source-files:
+    description: 'Cap on source files included in the zip sent to the API (0 = unlimited, default: 3000)'
+    required: false
+    default: '3000'
+  max-entities:
+    description: 'Cap on entity pages generated (0 = unlimited, default: 12000). Prioritizes Domain > Subdomain > Directory > File > Class/Type/Function by connectivity.'
+    required: false
+    default: '12000'
 
 outputs:
   site-path:

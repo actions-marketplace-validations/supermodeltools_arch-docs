@@ -90,7 +90,7 @@ type Artifact struct {
 
 // Run executes graph2md conversion. inputFiles is a comma-separated list of
 // paths to graph JSON files. outputDir is the directory for markdown output.
-func Run(inputFiles, outputDir, repoName, repoURL string) error {
+func Run(inputFiles, outputDir, repoName, repoURL string, maxEntities int) error {
 	if inputFiles == "" {
 		return fmt.Errorf("input is required (comma-separated paths to graph JSON files)")
 	}
@@ -383,6 +383,38 @@ func Run(inputFiles, outputDir, repoName, repoURL string) error {
 
 	log.Printf("Pass 1 complete: %d slugs generated", len(entries))
 
+	// Cap entities by priority + connectivity to stay within CF Pages 20k file limit.
+	if maxEntities > 0 && len(entries) > maxEntities {
+		// Score each node by relationship degree (higher = more architecturally central)
+		degree := make(map[string]int)
+		for _, rel := range allRels {
+			degree[rel.StartNode]++
+			degree[rel.EndNode]++
+		}
+		// Label priority: structural first, then files, then symbols
+		labelPriority := map[string]int{
+			"Domain": 0, "Subdomain": 1, "Directory": 2,
+			"File": 3, "Class": 4, "Type": 5, "Function": 6,
+		}
+		sort.SliceStable(entries, func(i, j int) bool {
+			pi := labelPriority[entries[i].label]
+			pj := labelPriority[entries[j].label]
+			if pi != pj {
+				return pi < pj
+			}
+			return degree[entries[i].node.ID] > degree[entries[j].node.ID]
+		})
+		log.Printf("Capping entities from %d to %d (max-entities limit)", len(entries), maxEntities)
+		entries = entries[:maxEntities]
+		// Rebuild slugLookup to only reference kept entries; dropped entities
+		// will degrade to plain text in internal links.
+		newSlugLookup := make(map[string]string, len(entries))
+		for _, e := range entries {
+			newSlugLookup[e.node.ID] = e.slug
+		}
+		slugLookup = newSlugLookup
+	}
+
 	// --- Pass 2: Generate markdown with internal links ---
 	var count int
 	for _, e := range entries {
@@ -583,6 +615,19 @@ func (c *renderContext) writeFileFrontmatter(sb *strings.Builder) {
 	}
 	if s, ok := c.belongsToSubdomain[c.node.ID]; ok {
 		sb.WriteString(fmt.Sprintf("subdomain: %q\n", s))
+	}
+
+	// File line count: use lineCount property, or compute from endLine
+	if lc := getNum(props, "lineCount"); lc > 0 {
+		sb.WriteString(fmt.Sprintf("line_count: %d\n", lc))
+	} else if endLine := getNum(props, "endLine"); endLine > 0 {
+		startLine := getNum(props, "startLine")
+		if startLine <= 0 {
+			startLine = 1
+		}
+		sb.WriteString(fmt.Sprintf("start_line: %d\n", startLine))
+		sb.WriteString(fmt.Sprintf("end_line: %d\n", endLine))
+		sb.WriteString(fmt.Sprintf("line_count: %d\n", endLine-startLine+1))
 	}
 
 	sb.WriteString(fmt.Sprintf("import_count: %d\n", depCount))
@@ -834,6 +879,16 @@ func (c *renderContext) writeDirectoryFrontmatter(sb *strings.Builder) {
 	fileCount := len(c.containsFile[c.node.ID])
 	subdirCount := len(c.childDir[c.node.ID])
 
+	// Aggregate function/class/type counts from contained files
+	funcCount := 0
+	classCount := 0
+	typeCount := 0
+	for _, fileID := range c.containsFile[c.node.ID] {
+		funcCount += len(c.definesFunc[fileID])
+		classCount += len(c.declaresClass[fileID])
+		typeCount += len(c.definesType[fileID])
+	}
+
 	title := fmt.Sprintf("%s/ — %s Directory Structure", path, c.repoName)
 	desc := fmt.Sprintf("Directory listing for %s/ in the %s codebase. Contains %d files and %d subdirectories.", path, c.repoName, fileCount, subdirCount)
 
@@ -845,6 +900,9 @@ func (c *renderContext) writeDirectoryFrontmatter(sb *strings.Builder) {
 	sb.WriteString(fmt.Sprintf("repo: %q\n", c.repoName))
 	sb.WriteString(fmt.Sprintf("file_count: %d\n", fileCount))
 	sb.WriteString(fmt.Sprintf("subdir_count: %d\n", subdirCount))
+	sb.WriteString(fmt.Sprintf("function_count: %d\n", funcCount))
+	sb.WriteString(fmt.Sprintf("class_count: %d\n", classCount))
+	sb.WriteString(fmt.Sprintf("type_count: %d\n", typeCount))
 
 	parts := strings.Split(path, "/")
 	if len(parts) > 0 {
@@ -1464,6 +1522,10 @@ type graphNode struct {
 	Label string `json:"label"`
 	Type  string `json:"type"`
 	Slug  string `json:"slug"`
+	LC    int    `json:"lc,omitempty"`   // line count
+	Lang  string `json:"lang,omitempty"` // language
+	CC    int    `json:"cc,omitempty"`   // call count (calls out)
+	CBC   int    `json:"cbc,omitempty"`  // called by count
 }
 
 type graphEdge struct {
@@ -1499,11 +1561,26 @@ func (c *renderContext) writeGraphData(sb *strings.Builder) {
 		if len(n.Labels) > 0 {
 			nodeType = n.Labels[0]
 		}
+		// Enrichment data
+		lineCount := 0
+		startLine := getNum(n.Properties, "startLine")
+		endLine := getNum(n.Properties, "endLine")
+		if startLine > 0 && endLine > 0 {
+			lineCount = endLine - startLine + 1
+		}
+		lang := getStr(n.Properties, "language")
+		callCount := len(c.calls[nodeID])
+		calledByCount := len(c.calledBy[nodeID])
+
 		nodes = append(nodes, graphNode{
 			ID:    nodeID,
 			Label: label,
 			Type:  nodeType,
 			Slug:  c.slugLookup[nodeID],
+			LC:    lineCount,
+			Lang:  lang,
+			CC:    callCount,
+			CBC:   calledByCount,
 		})
 	}
 
